@@ -1,0 +1,14 @@
+{
+	"name": "pi-petty",
+	"version": "1.0.0",
+	"description": "Standalone desk pet extension for pi coding agents (oh-my-pi and earendil-works/pi)",
+	"type": "module",
+	"private": true,
+	"scripts": {
+		"test": "bun test",
+		"typecheck": "tsc --noEmit"
+	},
+	"pi": {
+		"extensions": ["./index.ts"]
+	}
+}
