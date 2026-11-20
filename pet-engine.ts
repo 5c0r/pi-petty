@@ -1,5 +1,5 @@
 import type { PetSettings, PetSprite, SpriteFrames } from "./pet-data";
-import { Feeder, type FeedSource, type FoodPiece } from "./pet-food";
+import { Feeder, type FoodPiece } from "./pet-food";
 
 export interface PetClock {
  now(): number;
@@ -30,7 +30,7 @@ const MIRRORS: Readonly<Record<string, string>> = {
 };
 const NOOP = () => { };
 type Pose = keyof SpriteFrames;
-type PetSurface = "main" | "fireside" | "preview";
+type PetSurface = "main" | "preview";
 type Subscription = { redraw: () => void; surface: PetSurface };
 type Viewport = { columns: number; rows: number };
 type RenderCache = {
@@ -62,7 +62,7 @@ function mirrorWalking(frames: string[][]): string[][] {
 }
 
 /**
- * One animation shared by all placements. Owned drawable surfaces determine
+ * One animation shared by all surfaces. Owned drawable surfaces determine
  * canonical geometry; rendering projects that world without changing physics.
  * A disposed engine is permanently inert; create a new instance per session.
  */
@@ -200,12 +200,12 @@ export class PetEngine {
  }
 
  /** One visible assistant delta becomes at most one bounded piece of food. */
- feedDelta(text: string, source: FeedSource = "main"): number {
+ feedDelta(text: string): number {
   if (this.disposed) return 0;
   const now = this.clock.now();
   const admitted = this.viewportWidth > 0 && this.subscribers.size > 0
    && this.settings.motion === "animated" && this.settings.foodRain && now >= this.typingUntil;
-  const spawned = this.feeder.ingestDelta(text, now, source, admitted);
+  const spawned = this.feeder.ingestDelta(text, now, admitted);
   if (spawned > 0) {
    this.foodCache = undefined;
    this.notify();
@@ -213,8 +213,8 @@ export class PetEngine {
   return spawned;
  }
 
- resetFeed(source: FeedSource): void {
-  this.feeder.resetSource(source);
+ resetFeed(): void {
+  this.feeder.resetParser();
  }
 
  activity(kind: "typing" | "reply"): void {
@@ -320,8 +320,7 @@ export class PetEngine {
   this.subscribers.clear();
   this.viewports.clear();
   this.feeder.clear();
-  this.feeder.resetSource("main");
-  this.feeder.resetSource("fireside");
+  this.feeder.resetParser();
   this.chaseTargetId = null;
   this.foodCache = undefined;
   this.stopTimer();

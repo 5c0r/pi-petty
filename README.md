@@ -1,6 +1,6 @@
 # pi-petty
 
-Ten terminal companions for pi coding agents. Your pet walks above the editor, catches crumbs of streaming assistant text, and naps after a meal. Petty is the pet half of the former combined Fireside extension, now standalone: it owns the pet widget, the main-session food stream, and `/petty` — and nothing else.
+Ten terminal companions for pi coding agents. Your pet walks above the editor, catches crumbs of streaming assistant text, and naps after a meal. Petty runs standalone: it owns the pet widget, the main-session food stream, and `/petty` — and nothing else.
 
 Works with [earendil-works/pi](https://github.com/earendil-works/pi) (`pi`) and [oh-my-pi](https://github.com/can1357/oh-my-pi) (`omp`). Pets make no model or network calls.
 
@@ -35,7 +35,7 @@ If that registration already exists, inspect it first. Do not overwrite a real d
 
 Restart `pi` or `omp`, then run `/petty`. Opening the preview sends no model request — Petty never sends any.
 
-**During this split, the standalone branch is local work.** A plain `pi install` of the repository fetches whatever is published remotely, not the unpushed split changes. To exercise this exact source, install the checkout path (`pi install ./pi-petty`) or launch it directly from its parent directory:
+To exercise a local checkout without installing it, launch it directly from its parent directory:
 
 ```bash
 pi --no-extensions -e ./pi-petty/index.ts
@@ -46,20 +46,13 @@ Both hosts load `index.ts` directly. No build step or separate runtime dependenc
 
 To uninstall from Pi, inspect `pi list` and run `pi remove <source>` with the registered Git URL or checkout path. For OMP, remove only the Petty registration symlink. Keep unrelated registrations and the checkout.
 
-### Upgrading from the combined Fireside extension
+### Existing preferences
 
-Petty reads and writes the exact same `<agentDir>/fireside-pet.json` file the combined extension used — same schema, same path, no migration. To upgrade safely, unload the old combined Fireside first, then load Petty, so the combined pet controller and Petty never run against the same widget at once:
-
-1. Remove or disable the old combined Fireside registration, then restart the host.
-2. Install or link Petty as above.
-
-Your pet, name, `nameFollowsPet`, custom sprite file, placement, and every other preference survive. A preserved **Fireside-only** placement stays Fireside-only — Petty never silently switches it to Main. The old `/fireside-pet` command is replaced by `/petty`; there is no alias.
-
-To roll back, unload Petty first (remove its registration and restart), then restore the combined Fireside registration. Explicit menu **Save** is the only thing that ever writes the settings file.
+Petty keeps preferences at `<agentDir>/fireside-pet.json`. Existing files retain all supported settings. The legacy `placement` key is silently ignored on load, with no warning, migration, or file rewrite. Explicit menu **Save** omits that key.
 
 ## Ten terminal companions
 
-The pet occupies a small strip above the main editor, above a Fireside chat pane, or both. It does not replace the editor or take keyboard focus.
+The pet occupies a small strip above the main editor. It does not replace the editor or take keyboard focus.
 
 | Name | Species |
 |---|---|
@@ -109,7 +102,6 @@ Open `/petty`. Use **↑/↓** to choose a control, **←/→** to change a choi
 | Size | Compact (one row), full (three rows) |
 | Speed | Slow, normal, fast |
 | Personality | Calm, playful, sleepy |
-| Placement | Main editor, Fireside editor, both |
 | Motion | Animated, static, hidden |
 | Food rain | On, off |
 | Custom sprite file | Local JSON path; an absolute path is recommended |
@@ -120,22 +112,22 @@ Default names follow the selected species. Accepting a Name edit makes it custom
 
 All changes are previews until **Save preferences** succeeds. Save persists the exact selection; startup never rerolls it. **Escape** outside an edit discards the preview and restores the original settings, loaded sprite, position, animation frame, and food state. While editing a name/path, Enter accepts that field and Escape cancels that edit; neither saves preferences.
 
-The default is Miso with calm personality, theme color, full size, slow speed, main placement, animated motion, and food rain on. The pet turns at edges, pauses on observed input activity, sleeps after inactivity, and wakes on replies. Static mode has no animation timer; hidden mode removes the sprite. All placements share one animation.
+The default is Miso with calm personality, theme color, full size, slow speed, animated motion, and food rain on. The pet turns at edges, pauses on observed input activity, sleeps after inactivity, and wakes on replies. Static mode has no animation timer; hidden mode removes the sprite. The main widget and settings preview share one animation.
 
 Small terminals use compact art and safe clipping. Unicode names remain in preferences, but only printable ASCII names appear beside the sprite. Input observation does not inspect editor text, consume keys, or save typed input; modal input can also trigger it, while some host-captured gestures bypass observation.
 
 ### Streaming crumbs
 
-Only **visible assistant text deltas** from the main conversation become food — and, with Fireside loaded, visible deltas from Fireside replies. Thinking, tool output, whole-message snapshots, terminal controls, and unsafe glyphs do not. There is no food generation while idle.
+Only **visible assistant text deltas** from the main conversation become food. Thinking, tool output, whole-message snapshots, terminal controls, and unsafe glyphs do not. There is no food generation while idle.
 
-- Crumbs are **1–3 ASCII columns** wide. All streams share a limit of **10 pieces**, including the piece being munched, and **two spawns per second**. Skipped deltas are discarded, not queued.
+- Crumbs are **1–3 ASCII columns** wide. The food world holds at most **10 pieces**, including the piece being munched, with **two spawns per second**. Skipped deltas are discarded, not queued.
 - Food falls and lands within the pet strip. The pet chooses the nearest reachable grounded piece, runs toward it, then munches with a crumb effect and a brief `nom`. Chasing does not change your saved speed.
 - After **five pieces**, the pet pauses satisfied, then takes a protected **six-second digestion nap**. Replies cannot interrupt that nap, and new food does not spawn while satisfied or digesting.
 - Grounded food stays until eaten rather than expiring during rest. Falling pieces finish landing, and the pet resumes chasing leftovers after waking without needing another text delta.
 - Observed input pauses movement and rejects new food for **1.5 seconds**. Existing food keeps falling. Static/hidden motion, food rain off, and noninteractive modes stop sampling.
 - Compact and full views share one food world without changing each other's fall timing. Losing all drawable pet space clears transient food and stops sampling until space returns; resizing can remove pieces beyond the remaining width. A zero-space view does not erase food in another drawable view.
 
-Toggle **Food rain** in `/petty`. Preview cancellation restores cosmetic food state without rewinding the independent per-stream control-sequence parsers. Food sampling never changes the actual chat text.
+Toggle **Food rain** in `/petty`. Preview cancellation restores cosmetic food state without rewinding the control-sequence parser. Food sampling never changes the actual chat text.
 
 ### Custom sprites
 Create a local JSON file, select **Pet: custom**, set **Custom sprite file**, and Save. Custom sprites are inert data with no scripts, imports, or network requests.
@@ -165,19 +157,9 @@ Create a local JSON file, select **Pet: custom**, set **Custom sprite file**, an
 
 The schema requires `version: 1`, a safe nonempty label of at most 32 characters, and both `compact` and `full` sets. Each set needs `walking`, `idle`, and `sleep`, with 1–8 frames per pose. Compact frames have exactly one row; full frames have exactly three. Rows must be printable ASCII, at most 32 columns, with visible content in every frame. The loader rejects terminal controls, wide glyphs, malformed UTF-8, and files over 64 KiB. It pads rows per pose and mirrors walking frames for leftward movement.
 
-## Optional Fireside integration
-
-Petty has no dependency on [pi-fireside-chat](https://github.com/5c0r/pi-fireside-chat). Load it alone and everything above works; a **Fireside-only** placement simply shows no main-editor pet until a Fireside pane is open, and the preview always works.
-
-When both extensions are loaded, in either order, they meet on the public `fireside:companion:v1` host event channel only:
-
-- While a Fireside chat pane holds the focused overlay, Petty draws the existing pet strip inside that pane and observes typing the pane has already handled. Petty never receives raw pane input; while the pane is open it suspends its own main-editor input observer and restores it only for a still-owned main/both widget after the pane closes.
-- While a Fireside reply streams, its visible `text_delta` strings feed the same shared food world as main-session deltas. Closing the pane releases only the pane drawing; an active reply keeps feeding a Main/Both pet. Fireside-only with no pane open draws nothing and runs no timer.
-- Session switches, branches, and shutdown release old leases; a stale or disposed lease can never feed, reset a parser, or redraw a later owner.
-
 ## Privacy and performance
 
-Pets are local animation: no model calls, network traffic, telemetry, sound, or microphone. Petty uses public interactive TUI APIs and does not mount in RPC/print modes. One shared animation timer serves all drawable placements, and bounded food sampling retains only short crumb glyphs and parser modes, not whole replies or control payloads.
+Pets are local animation: no model calls, network traffic, telemetry, sound, or microphone. Petty uses public interactive TUI APIs and does not mount in RPC/print modes. One animation timer serves the main widget and preview, and bounded food sampling retains only short crumb glyphs and parser state, not whole replies or control payloads.
 
 Pet preferences are stored in `fireside-pet.json` under the active host's agent directory, normally `~/.pi/agent` or `~/.omp/agent`. Active profiles and `PI_CODING_AGENT_DIR` are honored; the path is resolved lazily at first use.
 
@@ -192,4 +174,4 @@ bun run typecheck
 git diff --check
 ```
 
-There is no build script. The package manifest registers `./index.ts` as a Pi extension; both hosts load TypeScript directly. Imports use host-provided `@earendil-works/pi-coding-agent` and `pi-tui` packages; OMP resolves those imports through its scope aliases. Behavioral tests cover pets, food, persistence, preview rollback, teardown, main/Fireside producers, and the companion channel boundary; runtime changes also need interactive smoke checks on both hosts.
+There is no build script. The package manifest registers `./index.ts` as a Pi extension; both hosts load TypeScript directly. Imports use host-provided `@earendil-works/pi-coding-agent` and `pi-tui` packages; OMP resolves those imports through its scope aliases. Behavioral tests cover pets, food, persistence, legacy-settings compatibility, preview rollback, teardown, and main-session streaming; runtime changes also need interactive smoke checks on both hosts.

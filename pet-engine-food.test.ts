@@ -24,7 +24,7 @@ class FakeClock implements PetClock {
 
 const BASE: PetSettings = {
 	pet: "custom", name: "", nameFollowsPet: false, palette: "theme", size: "compact",
-	speed: "normal", personality: "calm", placement: "main", motion: "animated",
+	speed: "normal", personality: "calm", motion: "animated",
 	customFile: "", foodRain: true,
 };
 const settings = (o: Partial<PetSettings> = {}): PetSettings => ({ ...BASE, ...o });
@@ -319,7 +319,7 @@ describe("no visible surface feeding guard", () => {
 	test("deltas are rejected with zero subscribers and feeding stops when the last surface detaches", () => {
 		const clock = new FakeClock();
 		const food = new Feeder(clock, () => 0.75);
-		const pet = engine(clock, { size: "full", placement: "fireside" }, food);
+		const pet = engine(clock, { size: "full" }, food);
 		try {
 			const baseline = pet.render(40, 3).join("\n");
 			expect(pet.feedDelta("unseen")).toBe(0);
@@ -338,7 +338,7 @@ describe("zero-space surface feeding guard", () => {
 	test("zero-row or zero-column renders clear feeding; a restored surface resumes sampling", () => {
 		const clock = new FakeClock();
 		const food = new Feeder(clock, () => 0.75);
-		const pet = engine(clock, { size: "full", placement: "fireside" }, food);
+		const pet = engine(clock, { size: "full" }, food);
 		try {
 			const off = pet.subscribe(() => { });
 			pet.render(40, 3);
@@ -364,36 +364,34 @@ describe("zero-space surface feeding guard", () => {
 });
 
 describe("review acceptance corrections", () => {
-	for (const source of ["main", "fireside"] as const) {
-		test(`${source} typing hold discards new food but preserves falling food and resumes at 1500ms`, () => {
-			const clock = new FakeClock();
-			const food = new Feeder(clock, () => 0.75);
-			const pet = engine(clock, { size: "full", speed: "slow" }, food);
-			const off = pet.subscribe(() => { });
-			try {
-				pet.render(80, 3);
-				expect(pet.feedDelta("old", source)).toBe(1);
-				pet.activity("typing");
-				expect(pet.feedDelta("drop", source)).toBe(0);
-				clock.advance(500); clock.fire();
-				expect(food.pieces(80, 3)[0]).toMatchObject({ glyph: "old", row: 1, landed: false });
-				expect(pet.feedDelta("drop", source)).toBe(0);
-				clock.advance(999); clock.fire();
-				expect(pet.feedDelta("drop", source)).toBe(0);
-				expect(food.pieces(80, 3)).toHaveLength(1);
-				expect(food.consumed()).toBe(0);
-				clock.advance(1);
-				expect(pet.feedDelta("new", source)).toBe(1);
-				expect(food.pieces(80, 3).map(piece => piece.glyph)).toEqual(["old", "new"]);
-				pet.update(settings({ size: "full", speed: "slow", foodRain: false }), sprite);
-				const before = pet.render(80, 3)[1].indexOf("[");
-				clock.advance(1000); clock.fire();
-				expect(pet.render(80, 3)[1].indexOf("[") - before).toBe(3);
-			} finally { off(); pet.dispose(); }
-		});
-	}
+	test("typing hold discards new food but preserves falling food and resumes at 1500ms", () => {
+		const clock = new FakeClock();
+		const food = new Feeder(clock, () => 0.75);
+		const pet = engine(clock, { size: "full", speed: "slow" }, food);
+		const off = pet.subscribe(() => { });
+		try {
+			pet.render(80, 3);
+			expect(pet.feedDelta("old")).toBe(1);
+			pet.activity("typing");
+			expect(pet.feedDelta("drop")).toBe(0);
+			clock.advance(500); clock.fire();
+			expect(food.pieces(80, 3)[0]).toMatchObject({ glyph: "old", row: 1, landed: false });
+			expect(pet.feedDelta("drop")).toBe(0);
+			clock.advance(999); clock.fire();
+			expect(pet.feedDelta("drop")).toBe(0);
+			expect(food.pieces(80, 3)).toHaveLength(1);
+			expect(food.consumed()).toBe(0);
+			clock.advance(1);
+			expect(pet.feedDelta("new")).toBe(1);
+			expect(food.pieces(80, 3).map(piece => piece.glyph)).toEqual(["old", "new"]);
+			pet.update(settings({ size: "full", speed: "slow", foodRain: false }), sprite);
+			const before = pet.render(80, 3)[1].indexOf("[");
+			clock.advance(1000); clock.fire();
+			expect(pet.render(80, 3)[1].indexOf("[") - before).toBe(3);
+		} finally { off(); pet.dispose(); }
+	});
 
-	test("source parsers stay independent while typing discards control syntax", () => {
+	test("typing hold still consumes control syntax without backlog", () => {
 		const clock = new FakeClock();
 		const food = new Feeder(clock, () => 0);
 		const pet = engine(clock, { size: "full" }, food);
@@ -401,63 +399,54 @@ describe("review acceptance corrections", () => {
 		try {
 			pet.render(80, 3);
 			pet.activity("typing");
-			expect(pet.feedDelta("\x1b]52;c;", "main")).toBe(0);
+			expect(pet.feedDelta("\x1b]52;c;")).toBe(0);
 			clock.advance(1500);
-			expect(pet.feedDelta("SECRET", "main")).toBe(0);
-			expect(pet.feedDelta("ok", "fireside")).toBe(1);
+			expect(pet.feedDelta("SECRET")).toBe(0);
 			clock.advance(500);
-			expect(pet.feedDelta("\x1b", "main")).toBe(0);
-			expect(pet.feedDelta("\\yes", "main")).toBe(1);
-			expect(food.pieces(80, 3).map(piece => piece.glyph)).toEqual(["ok", "yes"]);
+			expect(pet.feedDelta("\x1b")).toBe(0);
+			expect(pet.feedDelta("\\yes")).toBe(1);
+			expect(food.pieces(80, 3).map(piece => piece.glyph)).toEqual(["yes"]);
 		} finally { off(); pet.dispose(); }
 	});
 
-	for (const source of ["main", "fireside"] as const) {
-		const other = source === "main" ? "fireside" : "main";
-		for (const change of ["prefix", "terminator", "reset"] as const) {
-			test(`live parser preview Cancel preserves ${source} ${change} while restoring typing deadline`, () => {
-				const clock = new FakeClock();
-				const food = new Feeder(clock, () => 0);
-				const pet = engine(clock, { size: "full" }, food);
-				const off = pet.subscribe(() => { });
-				try {
-					pet.render(80, 3);
-					pet.feedDelta("\x1b]52;c;", other);
-					if (change !== "prefix") pet.feedDelta("\x1b]52;c;", source);
-					pet.activity("typing");
-					const rollback = pet.beginPreview();
-					clock.advance(2000);
-					if (change === "prefix") pet.feedDelta("\x1b]52;c;", source);
-					else if (change === "terminator") pet.feedDelta("SECRET\x07", source);
-					else pet.resetFeed(source);
-					rollback();
-					expect(pet.feedDelta("held", source)).toBe(0);
-					expect(pet.feedDelta("held", other)).toBe(0);
-					clock.advance(1500);
-					if (change === "prefix") expect(pet.feedDelta("SECRET\x07", source)).toBe(0);
-					expect(pet.feedDelta("ok", source)).toBe(1);
-					clock.advance(500);
-					expect(pet.feedDelta("SECRET", other)).toBe(0);
-					expect(pet.feedDelta("\x07yes", other)).toBe(1);
-					expect(food.pieces(80, 3).map(piece => piece.glyph)).toEqual(["ok", "yes"]);
-				} finally { off(); pet.dispose(); }
-			});
-		}
+	for (const change of ["prefix", "terminator", "reset"] as const) {
+		test(`live parser preview Cancel preserves ${change} while restoring typing deadline`, () => {
+			const clock = new FakeClock();
+			const food = new Feeder(clock, () => 0);
+			const pet = engine(clock, { size: "full" }, food);
+			const off = pet.subscribe(() => { });
+			try {
+				pet.render(80, 3);
+				if (change !== "prefix") pet.feedDelta("\x1b]52;c;");
+				pet.activity("typing");
+				const rollback = pet.beginPreview();
+				clock.advance(2000);
+				if (change === "prefix") pet.feedDelta("\x1b]52;c;");
+				else if (change === "terminator") pet.feedDelta("SECRET\x07");
+				else pet.resetFeed();
+				rollback();
+				expect(pet.feedDelta("held")).toBe(0);
+				clock.advance(1500);
+				if (change === "prefix") expect(pet.feedDelta("SECRET\x07")).toBe(0);
+				expect(pet.feedDelta("ok")).toBe(1);
+				expect(food.pieces(80, 3).map(piece => piece.glyph)).toEqual(["ok"]);
+			} finally { off(); pet.dispose(); }
+		});
 	}
 
 	for (const reverse of [false, true]) {
 		test(`mixed compact/full views keep full fall timing with render order ${reverse}`, () => {
 			const clock = new FakeClock();
 			const food = new Feeder(clock, () => 0.75);
-			const pet = engine(clock, { size: "full", placement: "both" }, food);
+			const pet = engine(clock, { size: "full" }, food);
 			const offMain = pet.subscribe(() => { }, "main");
-			const offSide = pet.subscribe(() => { }, "fireside");
+			const offPreview = pet.subscribe(() => { }, "preview");
 			const paint = () => {
 				if (reverse) {
 					pet.render(20, 1, "main");
-					pet.render(80, 3, "fireside");
+					pet.render(80, 3, "preview");
 				} else {
-					pet.render(80, 3, "fireside");
+					pet.render(80, 3, "preview");
 					pet.render(20, 1, "main");
 				}
 			};
@@ -472,41 +461,41 @@ describe("review acceptance corrections", () => {
 				clock.advance(200); clock.fire(); paint();
 				expect(food.pieces(80, 3)[0]?.landed).toBe(true);
 				expect(food.targetId()).toBe(1);
-				offSide();
+				offPreview();
 				clock.advance(250); clock.fire();
 				expect(food.pieces(20, 1)).toEqual([]);
 				expect(pet.feedDelta("new")).toBe(1);
 				expect(food.pieces(20, 1)[0]?.column).toBe(15);
-			} finally { offMain(); offSide(); pet.dispose(); }
+			} finally { offMain(); offPreview(); pet.dispose(); }
 		});
 	}
 
-	test("a zero-row Fireside view cannot erase a drawable main view", () => {
+	test("a zero-row preview view cannot erase a drawable main view", () => {
 		const clock = new FakeClock();
 		const food = new Feeder(clock, () => 0.75);
-		const pet = engine(clock, { size: "full", placement: "both" }, food);
+		const pet = engine(clock, { size: "full" }, food);
 		const offMain = pet.subscribe(() => { }, "main");
-		const offSide = pet.subscribe(() => { }, "fireside");
+		const offPreview = pet.subscribe(() => { }, "preview");
 		try {
 			pet.render(80, 3, "main");
-			pet.render(40, 3, "fireside");
+			pet.render(40, 3, "preview");
 			expect(pet.feedDelta("old")).toBe(1);
-			expect(pet.render(40, 0, "fireside")).toEqual([]);
+			expect(pet.render(40, 0, "preview")).toEqual([]);
 			clock.advance(500); clock.fire();
 			expect(food.pieces(80, 3)[0]).toMatchObject({ glyph: "old", row: 1 });
-			expect(pet.feedDelta("new", "fireside")).toBe(1);
+			expect(pet.feedDelta("new")).toBe(1);
 			offMain();
 			for (let i = 0; i < 4; i++) {
 				clock.advance(600); clock.fire();
-				expect(pet.feedDelta("no", "fireside")).toBe(0);
+				expect(pet.feedDelta("no")).toBe(0);
 				expect(food.pieces(80, 3)).toEqual([]);
 				expect(food.consumed()).toBe(0);
 			}
-			pet.render(40, 3, "fireside");
-			expect(pet.feedDelta("yes", "fireside")).toBe(1);
+			pet.render(40, 3, "preview");
+			expect(pet.feedDelta("yes")).toBe(1);
 			clock.advance(1000); clock.fire();
 			expect(food.pieces(40, 3)[0]?.landed).toBe(true);
-			expect(pet.render(40, 3, "fireside")[1].indexOf("[")).toBeGreaterThan(0);
-		} finally { offMain(); offSide(); pet.dispose(); }
+			expect(pet.render(40, 3, "preview")[1].indexOf("[")).toBeGreaterThan(0);
+		} finally { offMain(); offPreview(); pet.dispose(); }
 	});
 });

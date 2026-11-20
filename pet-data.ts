@@ -35,7 +35,6 @@ export interface PetSettings {
 	size: "compact" | "full";
 	speed: "slow" | "normal" | "fast";
 	personality: "calm" | "playful" | "sleepy";
-	placement: "main" | "fireside" | "both";
 	motion: "animated" | "static" | "hidden";
 	foodRain: boolean;
 	customFile: string;
@@ -62,7 +61,6 @@ export const DEFAULT_PET_SETTINGS: Readonly<PetSettings> = Object.freeze({
 	size: "full",
 	speed: "slow",
 	personality: "calm",
-	placement: "main",
 	motion: "animated",
 	foodRain: true,
 	customFile: "",
@@ -139,7 +137,6 @@ export function parsePetSettings(value: unknown): PetSettings {
 		size: enumSetting(fields.size === undefined ? defaults.size : fields.size, ["compact", "full"], "size"),
 		speed: enumSetting(fields.speed === undefined ? defaults.speed : fields.speed, ["slow", "normal", "fast"], "speed"),
 		personality: enumSetting(fields.personality === undefined ? defaults.personality : fields.personality, ["calm", "playful", "sleepy"], "personality"),
-		placement: enumSetting(fields.placement === undefined ? defaults.placement : fields.placement, ["main", "fireside", "both"], "placement"),
 		motion: enumSetting(fields.motion === undefined ? defaults.motion : fields.motion, ["animated", "static", "hidden"], "motion"),
 		foodRain,
 		customFile,
@@ -437,7 +434,7 @@ export function loadPetSettings(agentDir: string): { settings: PetSettings; erro
 export function savePetSettings(agentDir: string, settings: PetSettings): void {
 	const validated = parsePetSettings(settings);
 	mkdirSync(agentDir, { recursive: true, mode: 0o700 });
-	const temporaryDir = mkdtempSync(join(agentDir, ".fireside-pet-"));
+	const temporaryDir = mkdtempSync(join(agentDir, ".petty-"));
 	try {
 		const temporaryFile = join(temporaryDir, SETTINGS_FILE);
 		writeFileSync(temporaryFile, `${JSON.stringify(validated, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });

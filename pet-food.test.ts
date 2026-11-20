@@ -858,16 +858,6 @@ describe("incremental control filtering", () => {
   expect(feeder.ingestDelta("ok", 500)).toBe(1);
   expect(glyphAt(feeder)).toBe("ok");
  });
- test("main and Fireside control modes are independent", () => {
-  const { feeder } = makeFeeder([0]);
-  expect(feeder.ingestDelta("\x1b]52;c;", 0, "main")).toBe(0);
-  expect(feeder.ingestDelta("ok", 500, "fireside")).toBe(1);
-  expect(feeder.ingestDelta("SECRET", 1000, "main")).toBe(0);
-  expect(feeder.ingestDelta("\x1b[", 1000, "fireside")).toBe(0);
-  expect(feeder.ingestDelta("\x07yes", 1000, "main")).toBe(1);
-  expect(feeder.ingestDelta("31mnew", 1500, "fireside")).toBe(1);
-  expect(feeder.pieces(80, 3).map(piece => piece.glyph)).toEqual(["ok", "yes", "new"]);
- });
  for (const blocked of ["admission", "rate", "cap", "fullness"] as const) {
   test(`control syntax evolves through ${blocked} rejection without backlog`, () => {
    const { feeder } = makeFeeder([0]);
@@ -884,66 +874,59 @@ describe("incremental control filtering", () => {
     expect(feeder.phase()).toBe("satisfied");
     now = 6500;
    }
-   expect(feeder.ingestDelta("\x1b]52;c;", now, "main", blocked !== "admission")).toBe(0);
+   expect(feeder.ingestDelta("\x1b]52;c;", now, blocked !== "admission")).toBe(0);
    if (blocked === "cap") feeder.clear();
    if (blocked === "fullness") {
     feeder.step(now + 1200);
     feeder.step(now + 7200);
    }
    now += 8000;
-   expect(feeder.ingestDelta("SECRET", now, "main")).toBe(0);
-   expect(feeder.ingestDelta("\x07ok", now + 500, "main")).toBe(1);
+   expect(feeder.ingestDelta("SECRET", now)).toBe(0);
+   expect(feeder.ingestDelta("\x07ok", now + 500)).toBe(1);
    expect(feeder.pieces(80, 3).at(-1)?.glyph).toBe("ok");
   });
  }
- test("a discarded terminator releases its source even when sampling is blocked", () => {
+ test("a discarded terminator releases the parser even when sampling is blocked", () => {
   const { feeder } = makeFeeder([0]);
-  feeder.ingestDelta("\x1b]52;c;", 0, "main");
-  expect(feeder.ingestDelta("SECRET\x1b\\drop", 500, "main", false)).toBe(0);
-  expect(feeder.ingestDelta("ok", 1000, "main")).toBe(1);
+  feeder.ingestDelta("\x1b]52;c;", 0);
+  expect(feeder.ingestDelta("SECRET\x1b\\drop", 500, false)).toBe(0);
+  expect(feeder.ingestDelta("ok", 1000)).toBe(1);
   expect(glyphAt(feeder)).toBe("ok");
  });
- for (const source of ["main", "fireside"] as const) {
-  const other = source === "main" ? "fireside" : "main";
-  for (const control of [
-   { name: "OSC", prefix: "\x1b]52;c;", end: "SECRET\x07" },
-   { name: "CSI", prefix: "\x1b[", end: "31m" },
-  ]) {
-   test(`live parser preview Cancel preserves ${source} ${control.name} prefix received during preview`, () => {
-    const { feeder } = makeFeeder([0]);
-    const restore = feeder.beginPreview();
-    expect(feeder.ingestDelta(control.prefix, 0, source)).toBe(0);
-    restore();
-    expect(feeder.ingestDelta("ok", 500, other)).toBe(1);
-    expect(feeder.ingestDelta(control.end, 1000, source)).toBe(0);
-    expect(feeder.ingestDelta("yes", 1500, source)).toBe(1);
-    expect(feeder.pieces(80, 3).map(piece => piece.glyph)).toEqual(["ok", "yes"]);
-   });
+ for (const control of [
+  { name: "OSC", prefix: "\x1b]52;c;", end: "SECRET\x07" },
+  { name: "CSI", prefix: "\x1b[", end: "31m" },
+ ]) {
+  test(`live parser preview Cancel preserves ${control.name} prefix received during preview`, () => {
+   const { feeder } = makeFeeder([0]);
+   const restore = feeder.beginPreview();
+   expect(feeder.ingestDelta(control.prefix, 0)).toBe(0);
+   restore();
+   expect(feeder.ingestDelta(control.end, 1000)).toBe(0);
+   expect(feeder.ingestDelta("yes", 1500)).toBe(1);
+   expect(feeder.pieces(80, 3).map(piece => piece.glyph)).toEqual(["yes"]);
+  });
 
-   test(`live parser preview Cancel preserves ${source} ${control.name} terminator received during preview`, () => {
-    const { feeder } = makeFeeder([0]);
-    expect(feeder.ingestDelta(control.prefix, 0, source)).toBe(0);
-    const restore = feeder.beginPreview();
-    expect(feeder.ingestDelta(control.end, 0, source, false)).toBe(0);
-    restore();
-    expect(feeder.ingestDelta("ok", 500, source)).toBe(1);
-    expect(feeder.ingestDelta("yes", 1000, other)).toBe(1);
-    expect(feeder.pieces(80, 3).map(piece => piece.glyph)).toEqual(["ok", "yes"]);
-   });
+  test(`live parser preview Cancel preserves ${control.name} terminator received during preview`, () => {
+   const { feeder } = makeFeeder([0]);
+   expect(feeder.ingestDelta(control.prefix, 0)).toBe(0);
+   const restore = feeder.beginPreview();
+   expect(feeder.ingestDelta(control.end, 0, false)).toBe(0);
+   restore();
+   expect(feeder.ingestDelta("ok", 500)).toBe(1);
+   expect(feeder.ingestDelta("yes", 1000)).toBe(1);
+   expect(feeder.pieces(80, 3).map(piece => piece.glyph)).toEqual(["ok", "yes"]);
+  });
 
-   test(`live parser preview Cancel preserves ${source} ${control.name} reset without resetting the other source`, () => {
-    const { feeder } = makeFeeder([0]);
-    feeder.ingestDelta(control.prefix, 0, source);
-    feeder.ingestDelta("\x1b]52;c;", 0, other);
-    const restore = feeder.beginPreview();
-    feeder.resetSource(source);
-    restore();
-    expect(feeder.ingestDelta("ok", 500, source)).toBe(1);
-    expect(feeder.ingestDelta("SECRET", 1000, other)).toBe(0);
-    expect(feeder.ingestDelta("\x07yes", 1000, other)).toBe(1);
-    expect(feeder.pieces(80, 3).map(piece => piece.glyph)).toEqual(["ok", "yes"]);
-   });
-  }
+  test(`live parser preview Cancel does not resurrect a ${control.name} reset made during preview`, () => {
+   const { feeder } = makeFeeder([0]);
+   feeder.ingestDelta(control.prefix, 0);
+   const restore = feeder.beginPreview();
+   feeder.resetParser();
+   restore();
+   expect(feeder.ingestDelta(control.end, 500)).toBe(1);
+   expect(feeder.pieces(80, 3)).toHaveLength(1);
+  });
  }
 });
 

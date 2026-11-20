@@ -29,7 +29,6 @@ const DEFAULTS = {
 	size: "full",
 	speed: "slow",
 	personality: "calm",
-	placement: "main",
 	motion: "animated",
 	foodRain: true,
 	customFile: "",
@@ -67,7 +66,7 @@ function withWalkingFrames(sprite: unknown, frames: string[][]): unknown {
 }
 
 function withAgentDir(fn: (dir: string) => void): void {
-	const dir = mkdtempSync(join(tmpdir(), "fireside-pet-data-"));
+	const dir = mkdtempSync(join(tmpdir(), "petty-pet-data-"));
 	try {
 		fn(dir);
 	} finally {
@@ -80,6 +79,33 @@ describe("parsePetSettings", () => {
 	test("returns fresh defaults for undefined and null input", () => {
 		expect(parsePetSettings(undefined)).toEqual(DEFAULTS);
 		expect(parsePetSettings(null)).toEqual(DEFAULTS);
+	});
+
+	test("legacy extra keys load silently and disappear only on Save", () => {
+		const expected = {
+			pet: "toast",
+			name: "Biscuit",
+			nameFollowsPet: false,
+			palette: "amber",
+			size: "compact",
+			speed: "fast",
+			personality: "playful",
+			motion: "static",
+			foodRain: false,
+			customFile: "",
+		} as const;
+		withAgentDir(dir => {
+			const file = join(dir, "fireside-pet.json");
+			for (const placement of ["both", "main", null, []]) {
+				const original = JSON.stringify({ ...expected, placement });
+				writeFileSync(file, original);
+				const loaded = loadPetSettings(dir);
+				expect(loaded).toEqual({ settings: expected });
+				expect(readFileSync(file, "utf8")).toBe(original);
+				savePetSettings(dir, loaded.settings);
+				expect(JSON.parse(readFileSync(file, "utf8"))).toEqual(expected);
+			}
+		});
 	});
 
 	test("returns a fresh object each call; mutations never leak into defaults or later parses", () => {
@@ -106,7 +132,6 @@ describe("parsePetSettings", () => {
 			size: "compact",
 			speed: "fast",
 			personality: "playful",
-			placement: "both",
 			motion: "static",
 			foodRain: false,
 			customFile: "/tmp/robo.json",
@@ -140,7 +165,6 @@ describe("parsePetSettings", () => {
 			["size", "medium"],
 			["speed", "ludicrous"],
 			["personality", "angry"],
-			["placement", "side"],
 			["motion", "spinning"],
 		];
 		for (const [key, value] of cases) {
@@ -158,7 +182,6 @@ describe("parsePetSettings", () => {
 			["size", false],
 			["speed", null],
 			["personality", 0],
-			["placement", []],
 			["motion", {}],
 			["customFile", 3],
 			["customFile", null],
@@ -483,7 +506,6 @@ describe("savePetSettings / loadPetSettings", () => {
 				size: "compact",
 				speed: "fast",
 				personality: "sleepy",
-				placement: "both",
 				motion: "hidden",
 				foodRain: false,
 				customFile: "/tmp/robo.json",
@@ -814,7 +836,7 @@ describe("selectPet", () => {
 		expect(selectPet(settings(), "custom").name).toBe("Miso");
 		const original = Object.freeze(settings({
 			name: "Buddy", nameFollowsPet: false, palette: "rose", size: "compact", speed: "fast", personality: "sleepy",
-			placement: "both", motion: "static", customFile: "/tmp/my-pet.json",
+			motion: "static", customFile: "/tmp/my-pet.json",
 		}));
 		expect(selectPet(original, "nori")).toEqual({ ...original, pet: "nori" });
 	});
@@ -874,7 +896,7 @@ describe("randomizePetSettings", () => {
 	test("both rolls independently once per field and preserves unrelated preferences", () => {
 		const original = Object.freeze(settings({
 			palette: "amber", size: "compact", speed: "fast", personality: "playful",
-			placement: "fireside", motion: "hidden", foodRain: false, customFile: "/tmp/robot.json",
+			motion: "hidden", foodRain: false, customFile: "/tmp/robot.json",
 		}));
 		let calls = 0;
 		const chosen = randomizePetSettings(original, "both", () => calls++ === 0 ? 0 : last());

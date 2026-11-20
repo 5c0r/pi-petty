@@ -10,7 +10,7 @@ export interface FoodPiece {
 }
 
 export type FeedPhase = "idle" | "chasing" | "munching" | "satisfied" | "digesting";
-export type FeedSource = "main" | "fireside";
+
 
 type FallingPiece = FoodPiece & { spawnedAt: number };
 
@@ -65,7 +65,7 @@ class VisibleAsciiParser {
  }
 }
 
-/** A timer-free world shared by every visible assistant-text producer. */
+/** A timer-free world fed from one visible assistant-text stream. */
 export class Feeder {
  private food: FallingPiece[] = [];
  private feedPhase: FeedPhase = "idle";
@@ -78,7 +78,7 @@ export class Feeder {
  private digestUntil = -Infinity;
  private columns = 0;
  private rows = 0;
- private readonly parsers = { main: new VisibleAsciiParser(), fireside: new VisibleAsciiParser() };
+ private readonly parser = new VisibleAsciiParser();
 
  constructor(
   private readonly clock: PetClock,
@@ -89,11 +89,11 @@ export class Feeder {
  }
 
  /** Consume syntax even for discarded deltas; never queue missed fragments. */
- ingestDelta(text: string, atMs = this.clock.now(), source: FeedSource = "main", canSpawn = true): number {
+ ingestDelta(text: string, atMs = this.clock.now(), canSpawn = true): number {
   const admitted = canSpawn && this.feedPhase !== "satisfied" && this.feedPhase !== "digesting"
    && this.food.length < MAX_ACTIVE && atMs - this.lastSpawnAt >= SPAWN_MIN_INTERVAL_MS
    && this.columns > 0 && this.rows > 0;
-  const visible = this.parsers[source].consume(text, admitted);
+  const visible = this.parser.consume(text, admitted);
   if (!admitted) return 0;
   const glyph = this.fragment(visible);
   if (glyph === null) return 0;
@@ -178,8 +178,8 @@ export class Feeder {
   this.rows = Number.isFinite(rows) ? Math.max(0, Math.floor(rows)) : 0;
  }
 
- resetSource(source: FeedSource): void {
-  this.parsers[source].mode = "text";
+ resetParser(): void {
+  this.parser.mode = "text";
  }
 
  /** Independent projection cannot change the world's fall timing or reachability. */

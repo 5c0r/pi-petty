@@ -69,11 +69,6 @@ export interface PettyContext {
 
 export type PettyCommandContext = PettyContext;
 
-/** Structural subset of the host public event bus (fireside:companion:v1). */
-export interface PettyEventBus {
-	on(channel: string, handler: (message: unknown) => void): () => void;
-}
-
 export interface PettyExtensionAPI {
 	on(event: string, handler: (event: unknown, ctx: PettyContext) => void | Promise<void>): void;
 	registerCommand(
@@ -83,6 +78,4 @@ export interface PettyExtensionAPI {
 			handler: (args: string, ctx: PettyCommandContext) => Promise<void>;
 		},
 	): void;
-	/** Public cross-extension event bus; optional on hosts without one. */
-	events?: PettyEventBus;
 }

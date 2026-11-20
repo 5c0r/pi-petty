@@ -14,20 +14,20 @@ interface PetMenuOptions {
  done(): void;
 }
 
-const controls = ["randomPet", "randomColor", "surprise", "pet", "name", "palette", "size", "speed", "personality", "placement", "motion", "foodRain", "customFile", "save"] as const;
+const controls = ["randomPet", "randomColor", "surprise", "pet", "name", "palette", "size", "speed", "personality", "motion", "foodRain", "customFile", "save"] as const;
 const actions = { randomPet: "pet", randomColor: "color", surprise: "both" } as const;
 const choices = {
  pet: PET_IDS,
  palette: PET_PALETTES,
  size: ["compact", "full"], speed: ["slow", "normal", "fast"],
- personality: ["calm", "playful", "sleepy"], placement: ["main", "fireside", "both"],
+ personality: ["calm", "playful", "sleepy"],
  motion: ["animated", "static", "hidden"],
  foodRain: ["off", "on"],
 } as const;
 const labels: Record<typeof controls[number], string> = {
  randomPet: "Random pet", randomColor: "Random color", surprise: "Surprise me",
  pet: "Pet", name: "Name", palette: "Color", size: "Size", speed: "Speed",
- personality: "Personality", placement: "Placement", motion: "Motion",
+ personality: "Personality", motion: "Motion",
  customFile: "Custom sprite file", save: "Save preferences",
  foodRain: "Food rain",
 };

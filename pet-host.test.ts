@@ -7,7 +7,7 @@ import type { PaneComponent, PettyContext } from "./api";
 import type { PetClock } from "./pet-engine";
 
 function harness(clock?: PetClock) {
- const directory = mkdtempSync(join(tmpdir(), "fireside-host-"));
+ const directory = mkdtempSync(join(tmpdir(), "petty-host-"));
  let widget: PaneComponent | undefined;
  let input: ((data: string) => unknown) | undefined;
  let released = 0;
@@ -51,16 +51,18 @@ test("main widget preserves input and removes listener on replacement and shutdo
  } finally { ui.close(); }
 });
 
-test("hidden mode tears down main widget while Fireside placement renders above its editor", () => {
+test("hidden mode tears down the main widget and its input observer", () => {
  const ui = harness();
  try {
   ui.controller.ensure(ui.ctx);
-  ui.controller.apply({ ...ui.controller.settings, placement: "fireside", motion: "static" });
-  expect(ui.widget()).toBeUndefined();
-  expect(ui.controller.renderFireside(40, 3, ui.theme).join("\n")).toContain("Miso");
+  expect(ui.widget()).toBeDefined();
+  expect(ui.input()).toBeDefined();
   ui.controller.apply({ ...ui.controller.settings, motion: "hidden" });
-  expect(ui.controller.renderFireside(40, 3, ui.theme)).toEqual([]);
+  expect(ui.widget()).toBeUndefined();
   expect(ui.input()).toBeUndefined();
+  ui.controller.apply({ ...ui.controller.settings, motion: "static" });
+  expect(ui.widget()).toBeDefined();
+  expect(ui.input()).toBeDefined();
  } finally { ui.close(); }
 });
 
@@ -91,40 +93,12 @@ function harnessContextForRpc() {
  return { hasUI: true, ui: { setWidget() { throw new Error("RPC must never mount widgets"); } } };
 }
 
-test("an open Fireside surface rebinds animation across a session reset", () => {
- let now = 0;
- let next = 0;
- const callbacks = new Map<number, () => void>();
- const clock: PetClock = {
-  now: () => now,
-  setInterval: fn => { callbacks.set(++next, fn); return next; },
-  clearInterval: id => { callbacks.delete(id as number); },
- };
- const ui = harness(clock);
- try {
-  ui.controller.ensure(ui.ctx);
-  ui.controller.apply({ ...ui.controller.settings, placement: "fireside", speed: "fast" });
-  ui.controller.renderFireside(40, 3, ui.theme);
-  let paints = 0;
-  const unsubscribe = ui.controller.subscribe(() => { paints++; });
-  ui.controller.reset(ui.ctx);
-  ui.controller.renderFireside(40, 3, ui.theme);
-  const before = paints;
-  now += 1000;
-  for (const callback of callbacks.values()) callback();
-  expect(paints).toBeGreaterThan(before);
-  unsubscribe();
-  expect(callbacks.size).toBe(0);
- } finally { ui.close(); }
- expect(callbacks.size).toBe(0);
-});
-
 test("host-cleared widgets restore once even when another extension cancels session switching", async () => {
  const ui = harness();
  try {
   ui.controller.ensure(ui.ctx);
   const first = ui.widget();
- ui.ctx.ui.setWidget!("petty", undefined);
+  ui.ctx.ui.setWidget!("petty", undefined);
   expect(ui.input()).toBeUndefined();
   await Promise.resolve();
   expect(ui.widget()).toBeDefined();
@@ -132,39 +106,6 @@ test("host-cleared widgets restore once even when another extension cancels sess
   expect(ui.input()).toBeDefined();
   ui.controller.shutdown();
   await Promise.resolve();
-  expect(ui.widget()).toBeUndefined();
-  expect(ui.input()).toBeUndefined();
- } finally { ui.close(); }
-});
-
-test("companion pane holds suspend the main input observer and restore only drawable widgets", () => {
- const ui = harness();
- try {
-  ui.controller.ensure(ui.ctx);
-  expect(ui.input()).toBeDefined();
-  ui.controller.holdMainInput();
-  expect(ui.input()).toBeUndefined();
-  // A second hold stays idempotent, and the suspension survives a reset.
-  ui.controller.holdMainInput();
-  ui.controller.reset(ui.ctx);
-  expect(ui.input()).toBeUndefined();
-  ui.controller.releaseMainInput();
-  expect(ui.input()).toBeDefined();
-  // Fireside-only placement owns no drawable main widget to observe.
-  ui.controller.apply({ ...ui.controller.settings, placement: "fireside" });
-  expect(ui.input()).toBeUndefined();
-  ui.controller.releaseMainInput();
-  expect(ui.input()).toBeUndefined();
-  // A hold outliving a host takeover cannot restore an unowned slot.
-  ui.controller.apply({ ...ui.controller.settings, placement: "main" });
-  expect(ui.input()).toBeDefined();
-  ui.controller.holdMainInput();
-  expect(ui.input()).toBeUndefined();
-  ui.ctx.ui.setWidget!("petty", undefined);
-  ui.controller.releaseMainInput();
-  expect(ui.input()).toBeUndefined();
-  // Shutdown before the restoration microtask leaves nothing behind.
-  ui.controller.shutdown();
   expect(ui.widget()).toBeUndefined();
   expect(ui.input()).toBeUndefined();
  } finally { ui.close(); }

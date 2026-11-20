@@ -7,7 +7,7 @@ import { PetEngine, type PetClock } from "./pet-engine";
 import { createPetMenu } from "./pet-menu";
 
 const keys: Record<string, string> = { up: "\x1b[A", down: "\x1b[B", left: "\x1b[D", right: "\x1b[C", enter: "\r", escape: "\x1b", backspace: "\x7f", r: "r" };
-const fieldLabels = ["Random pet", "Random color", "Surprise me", "Pet", "Name", "Color", "Size", "Speed", "Personality", "Placement", "Motion", "Food rain", "Custom sprite file", "Save preferences"];
+const fieldLabels = ["Random pet", "Random color", "Surprise me", "Pet", "Name", "Color", "Size", "Speed", "Personality", "Motion", "Food rain", "Custom sprite file", "Save preferences"];
 function menu(options: {
  commit?: (value: typeof DEFAULT_PET_SETTINGS) => void;
  rows?: number;
@@ -76,8 +76,16 @@ function writeNarrowSprite(dir: string): string {
 const padding = (rows: string[]) => rows[0]?.match(/^ */)?.[0].length ?? 0;
 
 describe("pet customization", () => {
+ test("keyboard navigation goes directly from personality to motion", () => {
+  const ui = menu();
+  try {
+   ui.select("Personality");
+   ui.key("down");
+   expect(ui.text()).toContain("> Motion: static");
+  } finally { ui.component.dispose?.(); ui.engine.dispose(); }
+ });
  test("applies edited choices and a name through real persisted preferences", () => {
-  const dir = mkdtempSync(join(tmpdir(), "fireside-menu-"));
+  const dir = mkdtempSync(join(tmpdir(), "petty-menu-"));
   const ui = menu({ commit: value => savePetSettings(dir, value) });
   try {
    ui.select("Pet"); ui.key("right"); // Toast
@@ -250,11 +258,11 @@ describe("pet randomization", () => {
   } finally { ui.component.dispose?.(); ui.engine.dispose(); }
  });
  test("Save persists the exact rolled choices and preserves a custom name and unrelated settings", () => {
-  const dir = mkdtempSync(join(tmpdir(), "fireside-menu-random-"));
+  const dir = mkdtempSync(join(tmpdir(), "petty-menu-random-"));
   let writes = 0;
   const settings: PetSettings = {
    ...DEFAULT_PET_SETTINGS, name: "Biscuit", nameFollowsPet: false, size: "compact", speed: "fast",
-   personality: "sleepy", placement: "both", motion: "static", customFile: "/kept-local-path.json",
+   personality: "sleepy", motion: "static", customFile: "/kept-local-path.json",
   };
   const ui = menu({ settings, random: () => 0, commit: value => { writes++; savePetSettings(dir, value); } });
   try {
@@ -287,7 +295,7 @@ describe("pet randomization", () => {
   }
  });
  test("Escape restores the exact custom sprite rows and position after a larger builtin preview", () => {
-  const dir = mkdtempSync(join(tmpdir(), "fireside-menu-rollback-"));
+  const dir = mkdtempSync(join(tmpdir(), "petty-menu-rollback-"));
   const clock = fakeClock();
   const settings: PetSettings = {
    ...DEFAULT_PET_SETTINGS, pet: "custom", customFile: writeNarrowSprite(dir),
@@ -344,7 +352,7 @@ describe("pet randomization", () => {
 
 describe("explicit naming intent", () => {
  test("editing a collision name remains custom across selections and Save/reopen", () => {
-  const dir = mkdtempSync(join(tmpdir(), "fireside-name-intent-"));
+  const dir = mkdtempSync(join(tmpdir(), "petty-name-intent-"));
   const ui = menu({ random: () => 0, commit: value => savePetSettings(dir, value) });
   try {
    ui.select("Name"); ui.key("enter");
@@ -375,7 +383,7 @@ describe("explicit naming intent", () => {
  });
 
  test("Escape cancels name editing and whole-menu edits without changing default-follow intent", () => {
-  const dir = mkdtempSync(join(tmpdir(), "fireside-name-cancel-"));
+  const dir = mkdtempSync(join(tmpdir(), "petty-name-cancel-"));
   savePetSettings(dir, { ...DEFAULT_PET_SETTINGS, motion: "static" });
   const ui = menu({ commit: value => savePetSettings(dir, value) });
   try {

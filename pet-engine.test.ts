@@ -53,7 +53,6 @@ const BASE: PetSettings = {
  size: "compact",
  speed: "normal",
  personality: "calm",
- placement: "main",
  motion: "animated",
  foodRain: false,
  customFile: "",
